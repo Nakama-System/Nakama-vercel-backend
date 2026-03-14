@@ -1,6 +1,5 @@
 // ═══════════════════════════════════════════════════════════
 // index.js — Nakama Backend
-// CAMBIOS: SIN socket / SIN httpServer (apto Vercel o backend sin Socket.IO)
 // ═══════════════════════════════════════════════════════════
 
 require("dotenv").config();
