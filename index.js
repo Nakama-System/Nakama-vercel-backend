@@ -91,7 +91,7 @@ app.use("/movies", movieRoutes);
 app.use("/moviesup", moviesUpRoutes);
 
 // Health check
-app.get("/health", (_req, res) => {
+app.get("/", (_req, res) => {
   res.json({
     status: "ok",
     app: "Nakama API",
