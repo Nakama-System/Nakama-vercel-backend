@@ -234,13 +234,13 @@ exports.refreshToken = async (req, res) => {
 exports.googleCallback = async (req, res) => {
   try {
     const { user, isNewGoogleUser } = req.user || {};
-    if (!user) return res.redirect(`${process.env.CLIENT_URL}/login?error=google_failed`);
+    if (!user) return res.redirect(`https://nakama-front.vercel.app/login?error=google_failed`);
 
     if (!isNewGoogleUser && user.onboardingComplete) {
       const accessToken  = signAccessToken(user._id, user.role);
       const refreshToken = signRefreshToken(user._id);
       setRefreshCookie(res, refreshToken);
-      return res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${accessToken}`);
+      return res.redirect(`https://nakama-front.vercel.app/auth/callback?token=${accessToken}`);
     }
 
     const onboardingToken = signOnboardingToken(user._id);
