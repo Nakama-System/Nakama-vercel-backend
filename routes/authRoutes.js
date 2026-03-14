@@ -90,7 +90,7 @@ router.get("/google",
 // ── Google OAuth: callback ─────────────────────────────────
 router.get("/google/callback",
   passport.authenticate("google", {
-    failureRedirect: `${CLIENT_URL}/registro?error=consent_expired`,
+    failureRedirect: `https://nakama-front.vercel.app/registro?error=consent_expired`,
     session: false,
   }),
   async (req, res) => {
@@ -120,10 +120,10 @@ router.get("/google/callback",
         username: user.username,
       });
 
-      return res.redirect(`${CLIENT_URL}/registro/google?${params.toString()}`);
+      return res.redirect(`https://nakama-front.vercel.app/registro/google?${params.toString()}`);
     } catch (err) {
       console.error("[google/callback]", err);
-      return res.redirect(`${CLIENT_URL}/registro?error=server_error`);
+      return res.redirect(`https://nakama-front.vercel.app/registro?error=server_error`);
     }
   },
 );
