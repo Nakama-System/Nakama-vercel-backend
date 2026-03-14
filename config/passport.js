@@ -7,9 +7,9 @@ const PreConsent     = require("../models/PreConsent");
 passport.use(
   new GoogleStrategy(
     {
-      clientID:          "443410956068-93424jtt4moko2bdkq8emvorigegd6q1.apps.googleusercontent.com",
-      clientSecret:      "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",
-      callbackURL:       "https://nakama-vercel-backend.vercel.app/auth/google/callback",
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: process.env.GOOGLE_CALLBACK_URL,
       passReqToCallback: true, // necesario para leer req.query.state callbackURL:       "http://localhost:5000/auth/google/callback",
     },
     async (req, _accessToken, _refreshToken, profile, done) => {
