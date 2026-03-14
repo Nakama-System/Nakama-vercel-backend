@@ -9,8 +9,8 @@ passport.use(
     {
       clientID:          "443410956068-93424jtt4moko2bdkq8emvorigegd6q1.apps.googleusercontent.com",
       clientSecret:      "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",
-      callbackURL:       "http://localhost:5000/auth/google/callback",
-      passReqToCallback: true, // necesario para leer req.query.state
+      callbackURL:       "https://nakama-vercel-backend.vercel.app/auth/google/callback",
+      passReqToCallback: true, // necesario para leer req.query.state callbackURL:       "http://localhost:5000/auth/google/callback",
     },
     async (req, _accessToken, _refreshToken, profile, done) => {
       try {
