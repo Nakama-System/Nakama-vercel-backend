@@ -29,7 +29,7 @@ function getMemberId(m) {
 function initSocket(httpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || "http://localhost:3000",
+      origin: "https://nakama-bacend-render.onrender.com/",
       credentials: true,
       methods: ["GET", "POST"],
     },
