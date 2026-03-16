@@ -33,6 +33,7 @@ const nxControlRouter         = require("./routes/indexRoutes");
 const notificacionRoutes      = require("./routes/notificacionRoutes");
 const movieRoutes             = require("./routes/peliRoutes");
 const moviesUpRoutes          = require("./routes/moviesUpRoutes");
+const shareMovieRouter = require('./routes/shareMovieRoute');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -88,7 +89,7 @@ app.use("/nx-control", nxControlRouter);
 app.use("/notifications", notificacionRoutes);
 app.use("/movies", movieRoutes);
 app.use("/moviesup", moviesUpRoutes);
-
+app.use('/share-movie', shareMovieRouter);
 // Health check
 app.get("/", (_req, res) => {
   res.json({
