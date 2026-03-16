@@ -113,21 +113,29 @@ exports.getMovieById = async (req, res) => {
 };
 
 /* GET /moviesup/:id/share ───────────────────────────────── */
+/* GET /moviesup/:id/share ───────────────────────────────── */
 exports.getShareMeta = async (req, res) => {
   try {
     const m = await Movie.findById(req.params.id)
       .select("title description thumbnail slug _id").lean({ virtuals: true });
     if (!m) return res.status(404).json({ error: "No encontrada" });
 
-    const url  = `${FRONTEND_URL}/reproductor/${m._id}`;
-    const text = encodeURIComponent(`🎬 ${m.title}\n${(m.description || "").slice(0, 100)}…`);
-    const enc  = encodeURIComponent(url);
+    const sharePageUrl = `https://nakama-vercel-backend.vercel.app/share-movie?id=${m._id}`;
+    const title        = m.title || "Nakama Universe";
+    const text         = encodeURIComponent(`🎬 ${title}\n${(m.description || "").slice(0, 100)}…`);
+    const enc          = encodeURIComponent(sharePageUrl);
 
     res.json({
-      url, title: m.title, description: m.description, image: m.thumbnail,
+      url:         sharePageUrl,
+      title,
+      description: m.description,
+      image:       m.thumbnail,
       og: {
-        "og:title": m.title, "og:description": m.description,
-        "og:image": m.thumbnail, "og:url": url, "og:type": "video.movie",
+        "og:title":       title,
+        "og:description": m.description,
+        "og:image":       m.thumbnail,
+        "og:url":         sharePageUrl,
+        "og:type":        "video.movie",
       },
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${enc}`,
       whatsapp: `https://api.whatsapp.com/send?text=${text}%20${enc}`,
