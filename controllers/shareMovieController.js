@@ -1,7 +1,5 @@
 const Movie = require('../models/Movie');
 
-const FRONT_URL = 'https://nakama-front.vercel.app/peliculas';
-
 const CAT_COLORS = {
   accion: '#e63946', aventura: '#ff9f43', comedia: '#26de81',
   drama: '#a29bfe', terror: '#636e72', romance: '#fd79a8',
@@ -17,6 +15,11 @@ const AGE_META = {
 
 exports.getShareMoviePage = async (req, res) => {
   const { id } = req.query;
+
+  // ── Redirige directo al reproductor si hay id ──────────
+  const FRONT_URL = id
+    ? `https://nakama-front.vercel.app/reproductor/${id}`
+    : 'https://nakama-front.vercel.app/peliculas';
 
   let movie = null;
   if (id) {
@@ -94,7 +97,6 @@ exports.getShareMoviePage = async (req, res) => {
       overflow-x: hidden;
     }
 
-    /* ── Fondo ── */
     .bg-grid {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
@@ -110,7 +112,6 @@ exports.getShareMoviePage = async (req, res) => {
     .orb-1 { width: 300px; height: 300px; top: -80px; right: -60px; background: rgba(230,57,70,.12); }
     .orb-2 { width: 250px; height: 250px; bottom: -60px; left: -50px; background: rgba(116,185,255,.08); }
 
-    /* ── Card ── */
     .card {
       position: relative; z-index: 2;
       width: 100%;
@@ -124,7 +125,6 @@ exports.getShareMoviePage = async (req, res) => {
       box-shadow: 0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
     }
 
-    /* ── Thumbnail ── */
     .thumb {
       position: relative;
       width: 100%;
@@ -172,7 +172,6 @@ exports.getShareMoviePage = async (req, res) => {
     }
     .play-btn svg { width: 24px; height: 24px; fill: #fff; margin-left: 3px; }
 
-    /* ── Body ── */
     .body { padding: 20px 20px 22px; }
 
     .logo-row {
@@ -181,8 +180,7 @@ exports.getShareMoviePage = async (req, res) => {
     }
     .logo-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: ${accent};
-      flex-shrink: 0;
+      background: ${accent}; flex-shrink: 0;
       animation: dotpulse 1.6s infinite;
     }
     @keyframes dotpulse {
@@ -224,7 +222,6 @@ exports.getShareMoviePage = async (req, res) => {
       margin-left: 4px;
     }
 
-    /* ── Countdown ── */
     .countdown-box {
       display: flex; align-items: center; gap: 14px;
       background: ${accent}0e;
@@ -254,7 +251,6 @@ exports.getShareMoviePage = async (req, res) => {
     }
     .cd-text strong { color: rgba(255,255,255,.8); font-weight: 600; }
 
-    /* ── Watch button ── */
     .watch-btn {
       display: flex; align-items: center; justify-content: center; gap: 9px;
       width: 100%; padding: 14px;
@@ -269,7 +265,6 @@ exports.getShareMoviePage = async (req, res) => {
     .watch-btn:active { transform: scale(.98); }
     .watch-btn svg    { width: 16px; height: 16px; fill: #fff; }
 
-    /* ── Powered by ── */
     .powered {
       position: relative; z-index: 2;
       width: 100%; max-width: 440px;
@@ -281,7 +276,6 @@ exports.getShareMoviePage = async (req, res) => {
     }
     .powered span { color: ${accent}77; font-weight: 700; }
 
-    /* ── Mobile fine-tuning ── */
     @media (max-width: 480px) {
       body { padding: 12px 12px 20px; justify-content: flex-start; padding-top: 24px; }
       .card { border-radius: 18px; }
