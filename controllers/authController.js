@@ -4,6 +4,7 @@
 
 const jwt        = require("jsonwebtoken");
 const User       = require("../models/User");
+const formatUser = require("../utils/formatUser");
 const { uploadToCloudinary, trimVideoAndUpload } = require("../services/cloudinaryService");
 
 const JWT_SECRET            = process.env.JWT_SECRET            || "nakama_jwt_dev";
@@ -27,37 +28,7 @@ function setRefreshCookie(res, token) {
     maxAge:   30 * 24 * 60 * 60 * 1000,
   });
 }
-function formatUser(user) {
-  return {
-    id:                      user._id,
-    username:                user.username,
-    email:                   user.email,
-    role:                    user.role,
-    avatarUrl:               user.avatarUrl,
-    profileVideo:            user.profileVideo,
-    interests:               user.interests,
-    bio:                     user.bio,
-    displayName:             user.displayName,
-    rank:                    user.rank,
-    followersCount:          user.followersCount,
-    followingCount:          user.followingCount,
-    isOnline:                user.isOnline,
-    subscription:            user.subscription,
-    acceptedTermsVersion:    user.acceptedTermsVersion,
-    acceptedPrivacyVersion:  user.acceptedPrivacyVersion,
-    pendingTermsAcceptance:  user.pendingTermsAcceptance,
-    monthlyVideoLimit:       user.monthlyVideoLimit,
-    monthlyVideoRemaining:   user.monthlyVideoRemaining,
-    canCreateComunidad:      user.canCreateComunidad,
-    canToggleRoomVisibility: user.canToggleRoomVisibility,
-    onboardingComplete:      user.onboardingComplete,
-    createdAt:               user.createdAt,
-    // ── Stats de batalla ──
-    victorias:               user.victorias ?? 0,
-    derrotas:                user.derrotas  ?? 0,
-    empates:                 user.empates   ?? 0,
-  };
-}
+
 
 // ─── Default legalConsent para registros simples ──────────
 function buildDefaultLegalConsent(ip = "unknown") {
