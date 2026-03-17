@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // routes/chatRoutes.js — Nakama
 // FIX: avatares correctos · persistencia · bloquear · reportar
+// FIX: profileVideo incluido en todos los endpoints de usuarios
 // ═══════════════════════════════════════════════════════════
 
 const express        = require("express");
@@ -40,7 +41,7 @@ const LIMITS = {
 
 // ═══════════════════════════════════════════════════════════
 // GET /chats?type=chats|grupos|comunidades
-// FIX: para p2p devuelve SIEMPRE nombre+avatar del OTRO user
+// FIX: para p2p devuelve SIEMPRE nombre+avatar+profileVideo del OTRO user
 // ═══════════════════════════════════════════════════════════
 router.get("/", async (req, res) => {
   try {
@@ -57,14 +58,15 @@ router.get("/", async (req, res) => {
       .select("name avatarUrl type lastMessage lastActivity participants members theme pinned unreadCount")
       .lean();
 
-    // ── FIX AVATAR: para p2p, poblar el OTRO participante ──
+    // ── FIX AVATAR: para p2p, poblar el OTRO participante con profileVideo ──
     let otherMap = {};
     if (chatType === "p2p") {
       const otherIds = chats.flatMap(c =>
         (c.participants ?? []).filter(p => String(p) !== String(userId))
       );
+      // ✅ FIX: incluir profileVideo
       const otherUsers = await User.find({ _id: { $in: otherIds } })
-        .select("_id username avatarUrl").lean();
+        .select("_id username avatarUrl profileVideo").lean();
       otherUsers.forEach(u => { otherMap[String(u._id)] = u; });
     }
 
@@ -80,6 +82,7 @@ router.get("/", async (req, res) => {
         const member   = chat.members?.find(m => String(m.userId) === String(userId));
         let name       = chat.name || "Chat";
         let avatarUrl  = chat.avatarUrl || "";
+        let profileVideo = null;
         let isBlocked  = false;
         let otherId    = null;
 
@@ -87,31 +90,31 @@ router.get("/", async (req, res) => {
           otherId = (chat.participants ?? []).find(p => String(p) !== String(userId));
           const other = otherId ? otherMap[String(otherId)] : null;
           if (other) {
-            // ← SIEMPRE nombre y avatar del OTRO
-            name      = other.username;
-            avatarUrl = other.avatarUrl || "";
+            name         = other.username;
+            avatarUrl    = other.avatarUrl || "";
+            profileVideo = other.profileVideo ?? null; // ✅ FIX
           }
           isBlocked = otherId ? blockedSet.has(String(otherId)) : false;
         }
 
         return {
-          _id:        String(chat._id),
-          type:       chat.type === "p2p" ? "private" : chat.type,
+          _id:          String(chat._id),
+          type:         chat.type === "p2p" ? "private" : chat.type,
           name,
           avatarUrl,
-          lastMessage: chat.lastMessage || "",
-          lastTime:    formatTime(chat.lastActivity),
-          unread:      chat.unreadCount?.get?.(String(userId)) ?? chat.unreadCount?.[String(userId)] ?? 0,
-          memberCount: chat.members?.length ?? chat.participants?.length ?? 2,
-          theme:       chat.theme || "default",
-          pinned:      chat.pinned?.some(id => String(id) === String(userId)) ?? false,
-          muted:       member?.muted ?? false,
-          online:      false,
+          profileVideo,  // ✅ FIX
+          lastMessage:  chat.lastMessage || "",
+          lastTime:     formatTime(chat.lastActivity),
+          unread:       chat.unreadCount?.get?.(String(userId)) ?? chat.unreadCount?.[String(userId)] ?? 0,
+          memberCount:  chat.members?.length ?? chat.participants?.length ?? 2,
+          theme:        chat.theme || "default",
+          pinned:       chat.pinned?.some(id => String(id) === String(userId)) ?? false,
+          muted:        member?.muted ?? false,
+          online:       false,
           isBlocked,
-          otherId:     otherId ? String(otherId) : null,
+          otherId:      otherId ? String(otherId) : null,
         };
       })
-      // Chats bloqueados van al final en lugar de ocultarse (igual que WhatsApp)
       .sort((a, b) => Number(a.isBlocked) - Number(b.isBlocked));
 
     res.json(result);
@@ -123,7 +126,7 @@ router.get("/", async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════
 // POST /chats — crear p2p / grupo / comunidad
-// FIX: devuelve nombre+avatar del OTRO en p2p
+// FIX: devuelve nombre+avatar+profileVideo del OTRO en p2p
 // ═══════════════════════════════════════════════════════════
 router.post("/", async (req, res) => {
   try {
@@ -136,7 +139,6 @@ router.post("/", async (req, res) => {
       const [targetId] = members;
       if (!targetId) return res.status(400).json({ message: "Falta el destinatario." });
 
-      // Verificar bloqueo
       const block = await Block.findOne({
         $or: [
           { blocker: userId, blocked: targetId },
@@ -147,45 +149,46 @@ router.post("/", async (req, res) => {
         return res.status(403).json({ message: "No podés chatear con este usuario." });
       }
 
-      // Si ya existe la sala, devolverla con datos del OTRO
       const existing = await Chat.findOne({
         type: "p2p",
         participants: { $all: [userId, targetId] },
       }).lean();
 
-      const target = await User.findById(targetId).select("username avatarUrl").lean();
+      // ✅ FIX: incluir profileVideo
+      const target = await User.findById(targetId).select("username avatarUrl profileVideo").lean();
 
       if (existing) {
         return res.json({
-          _id:        String(existing._id),
-          type:       "private",
-          // ← FIX: siempre el nombre/avatar del otro
-          name:       target?.username ?? "Usuario",
-          avatarUrl:  target?.avatarUrl ?? "",
-          unread:     0,
-          lastMessage:existing.lastMessage ?? "",
-          lastTime:   formatTime(existing.lastActivity),
-          otherId:    String(targetId),
+          _id:          String(existing._id),
+          type:         "private",
+          name:         target?.username ?? "Usuario",
+          avatarUrl:    target?.avatarUrl ?? "",
+          profileVideo: target?.profileVideo ?? null, // ✅ FIX
+          unread:       0,
+          lastMessage:  existing.lastMessage ?? "",
+          lastTime:     formatTime(existing.lastActivity),
+          otherId:      String(targetId),
         });
       }
 
       const newChat = await Chat.create({
         type:         "p2p",
-        name:         "", // no se usa para p2p
+        name:         "",
         participants: [userId, targetId],
         members:      [],
         lastActivity: new Date(),
       });
 
       return res.status(201).json({
-        _id:       String(newChat._id),
-        type:      "private",
-        name:      target?.username ?? "Chat",
-        avatarUrl: target?.avatarUrl ?? "",
-        unread:    0,
-        lastMessage:"",
-        lastTime:  "Ahora",
-        otherId:   String(targetId),
+        _id:          String(newChat._id),
+        type:         "private",
+        name:         target?.username ?? "Chat",
+        avatarUrl:    target?.avatarUrl ?? "",
+        profileVideo: target?.profileVideo ?? null, // ✅ FIX
+        unread:       0,
+        lastMessage:  "",
+        lastTime:     "Ahora",
+        otherId:      String(targetId),
       });
     }
 
@@ -213,13 +216,13 @@ router.post("/", async (req, res) => {
     });
 
     return res.status(201).json({
-      _id:        String(newChat._id),
-      type:       chatType,
-      name:       newChat.name,
-      unread:     0,
-      lastMessage:"",
-      lastTime:   "Ahora",
-      memberCount:allMembers.length,
+      _id:         String(newChat._id),
+      type:        chatType,
+      name:        newChat.name,
+      unread:      0,
+      lastMessage: "",
+      lastTime:    "Ahora",
+      memberCount: allMembers.length,
     });
 
   } catch (err) {
@@ -245,7 +248,6 @@ router.get("/suggestions", async (req, res) => {
     );
     alreadyChatting.add(String(userId));
 
-    // Excluir bloqueados
     const blocks = await Block.find({ $or: [{ blocker: userId }, { blocked: userId }] })
       .select("blocker blocked").lean();
     const blockedIds = blocks.map(b =>
@@ -258,28 +260,38 @@ router.get("/suggestions", async (req, res) => {
     let suggestions  = [];
 
     if (contactIds.length > 0) {
+      // ✅ FIX: incluir profileVideo
       const contactUsers = await User.find({
         _id:      { $in: contactIds, $nin: [...alreadyChatting] },
         isActive: { $ne: false },
-      }).select("username avatarUrl role").limit(5).lean();
+      }).select("username avatarUrl profileVideo role").limit(5).lean();
 
       suggestions = contactUsers.map(u => ({
-        _id: String(u._id), username: u.username,
-        avatarUrl: u.avatarUrl ?? null, role: u.role,
-        source: "contacto", mutualCount: 0,
+        _id:          String(u._id),
+        username:     u.username,
+        avatarUrl:    u.avatarUrl ?? null,
+        profileVideo: u.profileVideo ?? null, // ✅ FIX
+        role:         u.role,
+        source:       "contacto",
+        mutualCount:  0,
       }));
     }
 
     if (suggestions.length < 5) {
       const exclude = new Set([...alreadyChatting, ...suggestions.map(s => s._id)]);
-      const others  = await User.find({
+      // ✅ FIX: incluir profileVideo
+      const others = await User.find({
         _id: { $nin: [...exclude] }, isActive: { $ne: false },
-      }).select("username avatarUrl role").limit(5 - suggestions.length).lean();
+      }).select("username avatarUrl profileVideo role").limit(5 - suggestions.length).lean();
 
       others.forEach(u => suggestions.push({
-        _id: String(u._id), username: u.username,
-        avatarUrl: u.avatarUrl ?? null, role: u.role,
-        source: "nakama", mutualCount: 0,
+        _id:          String(u._id),
+        username:     u.username,
+        avatarUrl:    u.avatarUrl ?? null,
+        profileVideo: u.profileVideo ?? null, // ✅ FIX
+        role:         u.role,
+        source:       "nakama",
+        mutualCount:  0,
       }));
     }
 
@@ -297,7 +309,6 @@ router.get("/search-users", async (req, res) => {
     const userId = req.user.id;
     if (String(q).length < 2) return res.json([]);
 
-    // Excluir bloqueados en búsqueda
     const blocks = await Block.find({ $or: [{ blocker: userId }, { blocked: userId }] })
       .select("blocker blocked").lean();
     const blockedIds = blocks.map(b =>
@@ -305,22 +316,24 @@ router.get("/search-users", async (req, res) => {
     );
 
     const regex = new RegExp(String(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    // ✅ FIX: incluir profileVideo
     const users = await User.find({
       _id:      { $ne: userId, $nin: blockedIds },
       username: regex,
       isActive: { $ne: false },
-    }).select("username avatarUrl role").limit(20).lean();
+    }).select("username avatarUrl profileVideo role").limit(20).lean();
 
     const me         = await User.findById(userId).select("contacts").lean();
     const contactSet = new Set((me?.contacts ?? []).map(c => String(c.userId)));
 
     res.json(users.map(u => ({
-      _id:       String(u._id),
-      username:  u.username,
-      avatarUrl: u.avatarUrl ?? null,
-      role:      u.role,
-      source:    contactSet.has(String(u._id)) ? "contacto" : "nakama",
-      isContact: contactSet.has(String(u._id)),
+      _id:          String(u._id),
+      username:     u.username,
+      avatarUrl:    u.avatarUrl ?? null,
+      profileVideo: u.profileVideo ?? null, // ✅ FIX
+      role:         u.role,
+      source:       contactSet.has(String(u._id)) ? "contacto" : "nakama",
+      isContact:    contactSet.has(String(u._id)),
     })));
   } catch (err) {
     console.error("[GET /chats/search-users]", err);
@@ -340,19 +353,20 @@ router.get("/social-search", async (req, res) => {
       return res.status(400).json({ message: "Plataforma no soportada." });
     }
 
-    const cleanQ     = String(q).replace(/^@/, "").trim();
-    const regex      = new RegExp(cleanQ.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    const socialField= `socialLinks.${platform}`;
+    const cleanQ      = String(q).replace(/^@/, "").trim();
+    const regex       = new RegExp(cleanQ.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    const socialField = `socialLinks.${platform}`;
 
+    // ✅ FIX: incluir profileVideo
     const users = await User.find({
       _id: { $ne: userId }, isActive: { $ne: false },
       $or: [{ [socialField]: regex }, { username: regex }],
-    }).select("username avatarUrl role socialLinks").limit(15).lean();
+    }).select("username avatarUrl profileVideo role socialLinks").limit(15).lean();
 
     if (users.length === 0) {
       return res.json([{
         nakamaId: null, username: cleanQ, displayName: cleanQ,
-        avatarUrl: null, platform: String(platform),
+        avatarUrl: null, profileVideo: null, platform: String(platform),
         inNakama: false, isContact: false,
         profileUrl: buildProfileUrl(String(platform), cleanQ),
       }]);
@@ -362,14 +376,15 @@ router.get("/social-search", async (req, res) => {
     const contactSet = new Set((me?.contacts ?? []).map(c => String(c.userId)));
 
     res.json(users.map(u => ({
-      nakamaId:    String(u._id),
-      username:    u.socialLinks?.[platform] || u.username,
-      displayName: u.username,
-      avatarUrl:   u.avatarUrl ?? null,
-      platform:    String(platform),
-      inNakama:    true,
-      isContact:   contactSet.has(String(u._id)),
-      profileUrl:  buildProfileUrl(String(platform), u.socialLinks?.[platform] || u.username),
+      nakamaId:     String(u._id),
+      username:     u.socialLinks?.[platform] || u.username,
+      displayName:  u.username,
+      avatarUrl:    u.avatarUrl ?? null,
+      profileVideo: u.profileVideo ?? null, // ✅ FIX
+      platform:     String(platform),
+      inNakama:     true,
+      isContact:    contactSet.has(String(u._id)),
+      profileUrl:   buildProfileUrl(String(platform), u.socialLinks?.[platform] || u.username),
     })));
   } catch (err) {
     console.error("[GET /chats/social-search]", err);
@@ -383,9 +398,11 @@ router.get("/contacts", async (req, res) => {
     const me = await User.findById(req.user.id).select("contacts").lean();
     if (!me?.contacts?.length) return res.json([]);
 
-    const ids   = me.contacts.map(c => c.userId).filter(Boolean);
-    const users = await User.find({ _id: { $in: ids } }).select("username avatarUrl role").lean();
-    const map   = {};
+    const ids = me.contacts.map(c => c.userId).filter(Boolean);
+    // ✅ FIX: incluir profileVideo
+    const users = await User.find({ _id: { $in: ids } })
+      .select("username avatarUrl profileVideo role").lean();
+    const map = {};
     users.forEach(u => { map[String(u._id)] = u; });
 
     res.json(
@@ -393,10 +410,15 @@ router.get("/contacts", async (req, res) => {
         const u = map[String(c.userId)];
         if (!u) return null;
         return {
-          userId:   String(u._id), username: u.username,
-          avatarUrl:u.avatarUrl ?? null, role: u.role,
-          alias:    c.alias || "", notes: c.notes || "",
-          source:   c.source || "nakama", savedAt: c.savedAt,
+          userId:       String(u._id),
+          username:     u.username,
+          avatarUrl:    u.avatarUrl ?? null,
+          profileVideo: u.profileVideo ?? null, // ✅ FIX
+          role:         u.role,
+          alias:        c.alias || "",
+          notes:        c.notes || "",
+          source:       c.source || "nakama",
+          savedAt:      c.savedAt,
         };
       }).filter(Boolean)
     );
@@ -412,8 +434,9 @@ router.post("/contacts", async (req, res) => {
     const { targetUserId, alias = "", notes = "", source = "nakama" } = req.body;
     if (!targetUserId) return res.status(400).json({ message: "Falta el ID del usuario." });
 
-    const target = await User.findById(targetUserId).select("username avatarUrl").lean();
-    if (!target)  return res.status(404).json({ message: "Usuario no encontrado." });
+    // ✅ FIX: incluir profileVideo
+    const target = await User.findById(targetUserId).select("username avatarUrl profileVideo").lean();
+    if (!target) return res.status(404).json({ message: "Usuario no encontrado." });
 
     const me = await User.findById(req.user.id);
     if (!me.contacts) me.contacts = [];
@@ -424,12 +447,22 @@ router.post("/contacts", async (req, res) => {
       if (notes)  already.notes  = notes;
       if (source) already.source = source;
       await me.save();
-      return res.json({ message: "Contacto actualizado.", username: target.username, avatarUrl: target.avatarUrl });
+      return res.json({
+        message:      "Contacto actualizado.",
+        username:     target.username,
+        avatarUrl:    target.avatarUrl,
+        profileVideo: target.profileVideo ?? null,
+      });
     }
 
     me.contacts.push({ userId: targetUserId, alias, notes, source, savedAt: new Date() });
     await me.save();
-    res.status(201).json({ message: "¡Contacto guardado! ✓", username: target.username, avatarUrl: target.avatarUrl });
+    res.status(201).json({
+      message:      "¡Contacto guardado! ✓",
+      username:     target.username,
+      avatarUrl:    target.avatarUrl,
+      profileVideo: target.profileVideo ?? null,
+    });
   } catch (err) {
     console.error("[POST /chats/contacts]", err);
     res.status(500).json({ message: "Error al guardar contacto." });
@@ -454,7 +487,6 @@ router.delete("/contacts/:userId", async (req, res) => {
 // BLOQUEAR / DESBLOQUEAR
 // ═══════════════════════════════════════════════════════════
 
-// POST /chats/block
 router.post("/block", async (req, res) => {
   try {
     const { targetUserId } = req.body;
@@ -467,7 +499,6 @@ router.post("/block", async (req, res) => {
     const target = await User.findById(targetUserId).select("username").lean();
     if (!target) return res.status(404).json({ message: "Usuario no encontrado." });
 
-    // upsert — si ya existe no tira error
     await Block.findOneAndUpdate(
       { blocker: userId, blocked: targetUserId },
       { blocker: userId, blocked: targetUserId },
@@ -481,7 +512,6 @@ router.post("/block", async (req, res) => {
   }
 });
 
-// DELETE /chats/block/:targetUserId
 router.delete("/block/:targetUserId", async (req, res) => {
   try {
     const { targetUserId } = req.params;
@@ -497,7 +527,6 @@ router.delete("/block/:targetUserId", async (req, res) => {
   }
 });
 
-// GET /chats/block — lista de usuarios bloqueados
 router.get("/block", async (req, res) => {
   try {
     const userId = req.user.id;
@@ -523,7 +552,6 @@ router.get("/block", async (req, res) => {
 // REPORTAR
 // ═══════════════════════════════════════════════════════════
 
-// POST /chats/report
 router.post("/report", async (req, res) => {
   try {
     const { targetUserId, chatId, messageId, reason, details = "" } = req.body;
@@ -539,7 +567,6 @@ router.post("/report", async (req, res) => {
     const target = await User.findById(targetUserId).select("username").lean();
     if (!target) return res.status(404).json({ message: "Usuario no encontrado." });
 
-    // Evitar reportes duplicados en menos de 24h para el mismo motivo
     const recent = await Report.findOne({
       reporter:  userId,
       reported:  targetUserId,
@@ -553,14 +580,14 @@ router.post("/report", async (req, res) => {
     await Report.create({
       reporter:  userId,
       reported:  targetUserId,
-      chatId:    chatId  || null,
+      chatId:    chatId    || null,
       messageId: messageId || null,
       reason,
       details:   details.slice(0, 500),
     });
 
     res.status(201).json({
-      message: `Reporte enviado. Revisaremos la situación con @${target.username}.`,
+      message:  `Reporte enviado. Revisaremos la situación con @${target.username}.`,
       reported: true,
     });
   } catch (err) {
@@ -574,7 +601,6 @@ router.post("/report", async (req, res) => {
 // /:id siempre al final
 // ═══════════════════════════════════════════════════════════
 
-// GET /chats/:id/messages?page=1&limit=50
 router.get("/:id/messages", async (req, res) => {
   try {
     const { page = 1, limit = 50 } = req.query;
@@ -585,7 +611,7 @@ router.get("/:id/messages", async (req, res) => {
       $or: [{ participants: userId }, { "members.userId": userId }],
     })
       .select("messages participants")
-      .populate("messages.sender", "username avatarUrl")
+      .populate("messages.sender", "username avatarUrl profileVideo") // ✅ FIX
       .lean();
 
     if (!chat) return res.status(404).json({ message: "Chat no encontrado." });
@@ -597,10 +623,11 @@ router.get("/:id/messages", async (req, res) => {
     res.json(msgs.map(m => ({
       id:         String(m._id),
       sender: {
-        _id:       String(m.sender?._id ?? m.sender),
-        username:  m.sender?.username ?? "Usuario",
-        avatarUrl: m.sender?.avatarUrl ?? null,
-        role:      m.sender?.role ?? "user",
+        _id:          String(m.sender?._id ?? m.sender),
+        username:     m.sender?.username ?? "Usuario",
+        avatarUrl:    m.sender?.avatarUrl ?? null,
+        profileVideo: m.sender?.profileVideo ?? null, // ✅ FIX
+        role:         m.sender?.role ?? "user",
       },
       roomType:   chat.participants?.length === 2 ? "private" : "group",
       roomId:     String(chat._id),
@@ -620,12 +647,12 @@ router.get("/:id/messages", async (req, res) => {
   }
 });
 
-// POST /chats/:id/messages (REST fallback — socket es el canal principal)
 router.post("/:id/messages", async (req, res) => {
   try {
     const { text = "", type = "text", fileUrl } = req.body;
     const userId = req.user.id;
-    const user   = await User.findById(userId).select("username avatarUrl").lean();
+    // ✅ FIX: incluir profileVideo del sender
+    const user = await User.findById(userId).select("username avatarUrl profileVideo").lean();
 
     const chat = await Chat.findOne({
       _id: req.params.id,
@@ -633,7 +660,6 @@ router.post("/:id/messages", async (req, res) => {
     });
     if (!chat) return res.status(404).json({ message: "Chat no encontrado." });
 
-    // Verificar bloqueo en p2p
     if (chat.type === "p2p") {
       const otherId = chat.participants.find(p => String(p) !== String(userId));
       if (otherId) {
@@ -648,13 +674,13 @@ router.post("/:id/messages", async (req, res) => {
     }
 
     const newMsg = {
-      sender:      userId,
-      text:        text,
-      attachment:  fileUrl ? { type, url: fileUrl } : null,
-      status:      "sent",
-      isSystem:    false,
-      deleted:     false,
-      reactions:   [],
+      sender:     userId,
+      text,
+      attachment: fileUrl ? { type, url: fileUrl } : null,
+      status:     "sent",
+      isSystem:   false,
+      deleted:    false,
+      reactions:  [],
     };
 
     chat.messages.push(newMsg);
@@ -664,12 +690,13 @@ router.post("/:id/messages", async (req, res) => {
 
     const saved = chat.messages[chat.messages.length - 1];
     res.status(201).json({
-      id:        String(saved._id),
+      id:      String(saved._id),
       sender: {
-        _id:       String(userId),
-        username:  user.username,
-        avatarUrl: user.avatarUrl ?? null,
-        role:      "user",
+        _id:          String(userId),
+        username:     user.username,
+        avatarUrl:    user.avatarUrl ?? null,
+        profileVideo: user.profileVideo ?? null, // ✅ FIX
+        role:         "user",
       },
       text:      saved.text,
       status:    saved.status,
